@@ -1,0 +1,72 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:batch="http://www.springframework.org/schema/batch"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:jdbc="http://www.springframework.org/schema/jdbc"
+	xsi:schemaLocation="
+           http://www.springframework.org/schema/beans
+           http://www.springframework.org/schema/beans/spring-beans.xsd
+           http://www.springframework.org/schema/jdbc http://www.springframework.org/schema/jdbc/spring-jdbc-3.0.xsd           
+           http://www.springframework.org/schema/context
+           http://www.springframework.org/schema/context/spring-context.xsd
+           http://www.springframework.org/schema/batch
+           http://www.springframework.org/schema/batch/spring-batch-2.2.xsd">
+
+	<import resource="launch-context.xml" />
+	
+	<!-- Criando um batch job, -->
+	<batch:job id="job-task-calculator">
+		<batch:step id="step-tax-calculated">
+			<batch:tasklet>
+				<batch:chunk commit-interval="50"
+					reader="transactionReader" 
+					processor="transactionProcessor"
+					writer="transactionWriter" />
+			</batch:tasklet>
+		</batch:step>
+
+	</batch:job>
+	<bean id="transactionReader"
+		class="org.springframework.batch.item.database.JdbcCursorItemReader">
+		<property name="dataSource" ref="dataSource" />
+		<property name="rowMapper">
+			<bean
+				class="br.com.fill.samples.entity.mapper.TransactionRowMapper"></bean>
+
+		</property>
+		<property name="sql">
+			<value>
+			<![CDATA[
+                   SELECT TRANS_ID, TRANS_DATE, BANK, TRANS_VALUE, TRANS_TYPE
+                      FROM TB_TRANSACTION
+                   WHERE TRANS_DATE < ?
+                       AND BANK = ?
+               ]]>
+			</value>
+		</property>
+		<property name="preparedStatementSetter">
+			<bean
+				class="br.com.fill.samples.entity.provider.TaxCalculatorReaderPreparedStatementSetter" scope="step">
+				<constructor-arg value="#{jobParameters['DT_TRANSACTION']}" />
+				<constructor-arg value="#{jobParameters['BANK']}" />
+			</bean>
+		</property>
+	</bean>
+	<bean id="transactionProcessor" class="br.com.fill.samples.job.processor.TaxCalculatorProcessor">
+	</bean>
+	<bean id="transactionWriter"
+		class="org.springframework.batch.item.database.JdbcBatchItemWriter">
+		<property name="dataSource" ref="dataSource" />
+		<property name="itemSqlParameterSourceProvider">
+			<bean
+				class="br.com.fill.samples.entity.provider.TransactionProvider" />
+		</property>
+		<property name="sql">
+			<value>
+                <![CDATA[
+                   UPDATE TB_TRANSACTION SET TAX = :TAX WHERE TRANS_ID = :TRANS_ID
+               ]]>
+			</value>
+		</property>
+	</bean>
+</beans>
